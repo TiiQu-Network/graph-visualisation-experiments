@@ -1,0 +1,5 @@
+# Ignore the r2rml files 
+/r2rml
+knowledge-config.properties
+knowledge-mapping.ttl
+knowledge-output.ttl

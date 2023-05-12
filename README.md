@@ -14,10 +14,10 @@
         pip install -r requirements.txt
         ```
     - Load the notebook in desired IDE and run the cells to recreate the output.
-    - If working on colab, load the notebook file on colab environment and install the dependencies following the sample command below, when prompted.
-        ```
-        !pip install <name-of-library>
-        ```
+- If working on colab, load the notebook file on colab environment and install the dependencies following the sample command below, when prompted.
+    ```
+    !pip install <name-of-library>
+    ```
 
 
 ## Outputs

@@ -13,13 +13,13 @@ logging.basicConfig(filename='../logs/runtime_logs.log', level=logging.INFO, for
 # PostgreSQL config
 ConfigDict = Dict[str, str]
 
-db_params: ConfigDict = {
+'''db_params: ConfigDict = {
     'dbname': 'pdf2qadev',
     'user': 'mathews.km@tiiqunetwork.onmicrosoft.com',
     'host': 'pdf2qa-dev20231229171910310300000001.clfojyqicnb4.eu-west-2.rds.amazonaws.com',
     'region': 'eu-west-2',
     'port': '5432'
-}
+}'''
 
 ENDPOINT="pdf2qa-dev20231229171910310300000001.clfojyqicnb4.eu-west-2.rds.amazonaws.com"
 PORT="5432"
@@ -31,14 +31,13 @@ def db_connect(db_params: ConfigDict) -> Optional[connection]:
     '''
     Establish a connection to the PostgreSQL db.
     '''
-    #os.environ['AWS_CONFIG_FILE'] = '~/.aws/config'
-    #session = boto3.Session(profile_name='RDSCredsTestProfile')
     try:
-        session = boto3.Session(
-            aws_access_key_id='AKIARTBJEWVJGRS2ZO72',
-            aws_secret_access_key='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',
-            region_name='eu-west-2'
-            )
+        session = boto3.Session(profile_name='RDSCredsTestProfile')
+        #session = boto3.Session(
+        #    aws_access_key_id='',
+        #    aws_secret_access_key='',
+        #    region_name=''
+        #    )
         
         client = session.client('rds')
 

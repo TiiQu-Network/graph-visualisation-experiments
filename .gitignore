@@ -3,3 +3,4 @@
 knowledge-config.properties
 knowledge-mapping.ttl
 knowledge-output.ttl
+/logs

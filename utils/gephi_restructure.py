@@ -8,7 +8,7 @@ from typing import List, Tuple, Dict, Optional
 import logging
 
 # Logging configuration
-logging.basicConfig(filename='gephi_restructure.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='./logs/gephi_restructure.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # PostgreSQL config
 ConfigDict = Dict[str, str]

@@ -8,43 +8,37 @@ from typing import List, Tuple, Dict, Optional
 import logging
 
 # Logging configuration
-logging.basicConfig(filename='../logs/runtime_logs.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(filename='gephi_restructure.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # PostgreSQL config
 ConfigDict = Dict[str, str]
 
-'''db_params: ConfigDict = {
-    'dbname': 'pdf2qadev',
-    'user': 'mathews.km@tiiqunetwork.onmicrosoft.com',
-    'host': 'pdf2qa-dev20231229171910310300000001.clfojyqicnb4.eu-west-2.rds.amazonaws.com',
-    'region': 'eu-west-2',
-    'port': '5432'
-}'''
-
-ENDPOINT="pdf2qa-dev20231229171910310300000001.clfojyqicnb4.eu-west-2.rds.amazonaws.com"
-PORT="5432"
-USER="mathews.km@tiiqunetwork.onmicrosoft.com"
-REGION="eu-west-2"
-DBNAME="pdf2qadev"
+db_params: ConfigDict = {
+    'DBNAME': 'pdf2qadev',
+    'USER': 'dev_user',
+    'ENDPOINT': 'pdf2qa-dev20231229171910310300000001.clfojyqicnb4.eu-west-2.rds.amazonaws.com',
+    'REGION': 'eu-west-2',
+    'PORT': '5432'
+}
 
 def db_connect(db_params: ConfigDict) -> Optional[connection]:
     '''
     Establish a connection to the PostgreSQL db.
     '''
     try:
-        session = boto3.Session(profile_name='RDSCredsTestProfile')
+        client = boto3.client('rds',endpoint_url=db_params['ENDPOINT'],region_name=db_params['REGION'])
+
+        #session = boto3.Session(profile_name='RDSCredsTestProfile')
         #session = boto3.Session(
         #    aws_access_key_id='',
         #    aws_secret_access_key='',
         #    region_name=''
         #    )
-        
-        client = session.client('rds')
 
-        token = client.generate_db_auth_token(DBHostname=ENDPOINT, 
-                                            Port=PORT, 
-                                            DBUsername=USER, 
-                                            Region=REGION)
+        token = client.generate_db_auth_token(DBHostname=db_params['ENDPOINT'], 
+                                            Port=db_params['PORT'], 
+                                            DBUsername=db_params['USER'], 
+                                            Region=db_params['REGION'])
         logging.info('Boto session created.')
         #db_params['token'] = token
     except Exception as err:
@@ -52,7 +46,7 @@ def db_connect(db_params: ConfigDict) -> Optional[connection]:
         return None
 
     try:
-        conn: connection = psycopg2.connect(host=ENDPOINT, port=PORT, database=DBNAME, user=USER, password=token)
+        conn: connection = psycopg2.connect(host=db_params['ENDPOINT'], port=db_params['PORT'], database=db_params['DBNAME'], user=db_params['USER'], password=token)
         logging.info('Database connection established.')
         return conn
     except psycopg2.Error as err:
@@ -162,6 +156,3 @@ def main():
     # Close the connection
     conn.close()
     logging.info('Closing the database connection. . .')
-    
-if __name__ == '__main__':
-    main()

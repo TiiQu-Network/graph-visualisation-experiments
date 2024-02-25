@@ -13,14 +13,6 @@ logging.basicConfig(filename='gephi_restructure.log', level=logging.INFO, format
 # PostgreSQL config
 ConfigDict = Dict[str, str]
 
-db_params: ConfigDict = {
-    'DBNAME': 'pdf2qadev',
-    'USER': 'dev_user',
-    'ENDPOINT': 'pdf2qa-dev20231229171910310300000001.clfojyqicnb4.eu-west-2.rds.amazonaws.com',
-    'REGION': 'eu-west-2',
-    'PORT': '5432'
-}
-
 def db_connect(db_params: ConfigDict) -> Optional[connection]:
     '''
     Establish a connection to the PostgreSQL db.
@@ -53,6 +45,7 @@ def db_connect(db_params: ConfigDict) -> Optional[connection]:
         logging.error(f'Error connecting to the PostgreSQL database: {err}')
         return None
 
+
 def db_pull(conn: connection) -> Optional[pd.DataFrame]:
     '''
     Pull the data from the database.
@@ -84,12 +77,14 @@ def db_pull(conn: connection) -> Optional[pd.DataFrame]:
         logging.error(f'Error fetching the data from the PostgreSQL database: {err}')
         return None
     
+    
 def print_results(results: List[Tuple]) -> None:
     '''
     Log the results fetched from the database.
     '''
     for row in results:
         logging.info(f"Row: {row}")
+
 
 def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame) -> bool:
     '''
@@ -139,20 +134,3 @@ def gephi_restructure(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         edges_df = edges_df.append({'Source': source_node, 'Target': target_node, 'Type': 'undirected'}, ignore_index=True)
 
     return nodes_df, edges_df
-
-def main():
-    # Establish the connection to the database
-    conn = db_connect(db_params)
-
-    if conn:
-        df_data = db_pull(conn)
-
-        if df_data is not None and not df_data.empty:
-            df_nodes, df_edges = gephi_restructure(df_data)
-
-            # Pushing the data backl to the database 
-            db_push(conn, df_nodes, df_edges)
-    
-    # Close the connection
-    conn.close()
-    logging.info('Closing the database connection. . .')

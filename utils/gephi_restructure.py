@@ -1,46 +1,45 @@
-import psycopg2
 import sys
 import os
-import boto3
-import pandas as pd
-from psycopg2.extensions import connection
 from typing import List, Tuple, Dict, Optional
 import logging
 
 # Logging configuration
 logging.basicConfig(filename='./logs/gephi_restructure.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+import boto3
+import psycopg2
+from psycopg2.extensions import connection
+
+import pandas as pd
+
+
 # PostgreSQL config
 ConfigDict = Dict[str, str]
+
+def get_db_version(conn: connection)-> List[str]:
+        cursor = conn.cursor()
+
+        # Execute a sample query
+        cursor.execute("SELECT version();")
+        result = cursor.fetchone()
+        return result[0]
+
 
 def db_connect(db_params: ConfigDict) -> Optional[connection]:
     '''
     Establish a connection to the PostgreSQL db.
     '''
     try:
-        client = boto3.client('rds',endpoint_url=db_params['ENDPOINT'],region_name=db_params['REGION'])
-
-        #session = boto3.Session(profile_name='RDSCredsTestProfile')
-        #session = boto3.Session(
-        #    aws_access_key_id='',
-        #    aws_secret_access_key='',
-        #    region_name=''
-        #    )
-
-        token = client.generate_db_auth_token(DBHostname=db_params['ENDPOINT'], 
-                                            Port=db_params['PORT'], 
-                                            DBUsername=db_params['USER'], 
-                                            Region=db_params['REGION'])
-        logging.info('Boto session created.')
-        #db_params['token'] = token
-    except Exception as err:
-        logging.info('Something went wrong. . .', err)
-        return None
-
-    try:
-        conn: connection = psycopg2.connect(host=db_params['ENDPOINT'], port=db_params['PORT'], database=db_params['DBNAME'], user=db_params['USER'], password=token)
+        conn: connection = psycopg2.connect(
+            host=db_params['ENDPOINT'], 
+            port=db_params['PORT'], 
+            database=db_params['DBNAME'], 
+            user=db_params['USER'], 
+            password=db_params['PASSWORD'])
+        
         logging.info('Database connection established.')
         return conn
+    
     except psycopg2.Error as err:
         logging.error(f'Error connecting to the PostgreSQL database: {err}')
         return None
@@ -56,15 +55,13 @@ def db_pull(conn: connection) -> Optional[pd.DataFrame]:
             SELECT
                 s.name as SubTopic,
                 t.name as Topic,
-                m.name as MacroTopic,
+                m.name as MacroTopic
             FROM
                 qnaSubtopic s
             JOIN
                 Topic t ON s.topicid = t.id
             JOIN
-                Macrotopic m ON t.macrotopicid = m.id
-            WHERE
-                
+                Macrotopic m ON t.macrotopicid = m.id;
         """
 
     try:
@@ -98,7 +95,7 @@ def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame) ->
 
             # Push edges to GephiEdges table
             for _, row in df_edges.iterrows():
-                cur.execute("INSERT INTO GephiEdges (source, target) VALUES (%s, %s);", (row['Source'], row['Target']))
+                cur.execute("INSERT INTO GephiEdges (source, target, type) VALUES (%s, %s);", (row['Source'], row['Target'] ,row['Type']))
 
             # Commit the changes
             conn.commit()
@@ -108,6 +105,10 @@ def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame) ->
     except psycopg2.Error as err:
         logging.error(f'Error pushing data to the database: {err}')
         return False
+
+
+def db_rollback(conn: connection):
+    conn.rollback()
  
 
 def gephi_restructure(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:

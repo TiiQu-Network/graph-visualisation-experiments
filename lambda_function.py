@@ -3,13 +3,10 @@ import json
 from typing import List, Tuple, Dict, Optional
 import logging
 
-# Logging configuration
-logging.basicConfig(filename='./logs/gephi_restructure.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 import psycopg2
 import boto3
 
-from utils.gephi_restructure import get_db_version, db_connect, db_pull, db_push, gephi_restructure, db_rollback
+from utils.gephi_restructure import get_db_version, db_connect, db_pull, db_push, gephi_restructure, db_rollback, get_db_tables
 
 # PostgreSQL config
 ConfigDict = Dict[str, str]
@@ -29,10 +26,15 @@ def lambda_handler(event, context):
 
     if conn:
         db_version = get_db_version(conn)
-        print(f"PostgreSQL version: {db_version}")
+        print(f'PostgreSQL version: {db_version}')
+
+        db_tables = get_db_tables(conn)
+        print(f'Tables in Postgres database: {db_tables}')
+
         df_data = db_pull(conn)
 
         if df_data is not None and not df_data.empty:
+            print(f'Database is not empty. . .{df_data.to_dict()}')
             df_nodes, df_edges = gephi_restructure(df_data)
 
             # Pushing the data backl to the database 
@@ -41,7 +43,7 @@ def lambda_handler(event, context):
             if db_push_status:    
                 # Close the connection
                 conn.close()
-                logging.info('Closing the database connection. . .')
+                print('Closing the database connection. . .')
                 
                 return {
                     'statusCode': 200,
@@ -50,13 +52,23 @@ def lambda_handler(event, context):
             else:
                 # Rollback the changes
                 db_rollback()
-                logging.info('Failed to push data, rolling back changes. . .')
+                print('Failed to push data, rolling back changes. . .')
 
                 # Close the conneciton
                 conn.close()
-                logging.info('Closing the database connection. . .')
+                print('Closing the database connection. . .')
 
                 return {
                     'statusCode': 200,
                     'body': json.dumps({'message': 'Restructuring failed. . .'})
                 } 
+        else:
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'message': 'Restructuring failed. . .No data exists in database.'})
+            } 
+    else:
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Restructuring failed. . .connection to database failed.'})
+        } 

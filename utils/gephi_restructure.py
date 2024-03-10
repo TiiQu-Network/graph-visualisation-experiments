@@ -3,9 +3,6 @@ import os
 from typing import List, Tuple, Dict, Optional
 import logging
 
-# Logging configuration
-logging.basicConfig(filename='./logs/gephi_restructure.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 import boto3
 import psycopg2
 from psycopg2.extensions import connection
@@ -16,13 +13,34 @@ import pandas as pd
 # PostgreSQL config
 ConfigDict = Dict[str, str]
 
-def get_db_version(conn: connection)-> List[str]:
-        cursor = conn.cursor()
+def get_db_tables(conn: connection) -> List[str]:
+    sql_query = """
+    SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public';
+    """
+    try:
+        with conn.cursor() as curr:
+            curr.execute(sql_query)
+            result = curr.fetchall()
 
-        # Execute a sample query
-        cursor.execute("SELECT version();")
-        result = cursor.fetchone()
-        return result[0]
+            table_names = [row[0]  for row in result]
+
+            return table_names
+    except psycopg2.Error as err:
+        print(f'Error fetching the data from the PostgreSQL database: {err}')
+        return None
+
+
+def get_db_version(conn: connection)-> List[str]:
+        sql_query = "SELECT version();"
+        try:
+            with conn.cursor() as curr:
+                curr.execute(sql_query)
+                result = curr.fetchone()
+
+                return result[0]
+        except psycopg2.Error as err:
+            print(f'Error fetching the data from the PostgreSQL database: {err}')
+            return None
 
 
 def db_connect(db_params: ConfigDict) -> Optional[connection]:
@@ -37,11 +55,11 @@ def db_connect(db_params: ConfigDict) -> Optional[connection]:
             user=db_params['USER'], 
             password=db_params['PASSWORD'])
         
-        logging.info('Database connection established.')
+        print('Database connection established.')
         return conn
     
     except psycopg2.Error as err:
-        logging.error(f'Error connecting to the PostgreSQL database: {err}')
+        print(f'Error connecting to the PostgreSQL database: {err}')
         return None
 
 
@@ -61,17 +79,25 @@ def db_pull(conn: connection) -> Optional[pd.DataFrame]:
             JOIN
                 Topic t ON s.topicid = t.id
             JOIN
-                Macrotopic m ON t.macrotopicid = m.id;
+                Macrotopic m ON t.macrotopicid = m.id
+            WHERE
+                s.Status = 0 AND t.Status = 0 AND m.Status = 0;
         """
 
     try:
         with conn.cursor() as cur:
             cur.execute(sql_query)
-            df: pd.DataFrame = pd.DataFrame(cur.fetchall(), columns=[desc for desc in cur.description()])
-            logging.info('Data fetched successfully.')
+            rows = cur.fetchall()
+            columns = [desc[0] for desc in cur.description]
+            data = [dict(zip(columns, row)) for row in rows]
+            df: pd.DataFrame = pd.DataFrame(data)
+            if df.shape[0] > 0:
+                print('Data fetched successfully.')
+            else:
+                print('No data in the table.')
             return df
     except psycopg2.Error as err:
-        logging.error(f'Error fetching the data from the PostgreSQL database: {err}')
+        print(f'Error fetching the data from the PostgreSQL database: {err}')
         return None
     
     
@@ -108,7 +134,10 @@ def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame) ->
 
 
 def db_rollback(conn: connection):
-    conn.rollback()
+    try:
+        conn.rollback()
+    except psycopg2.Error as err:
+        print(f'Error rolling back PostgreSQL database: {err}')
  
 
 def gephi_restructure(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:

@@ -60,7 +60,7 @@ def lambda_handler(event, context):
                 }
             else:
                 # Rollback the changes
-                db_rollback()
+                db_rollback(conn)
                 print('Failed to push data, rolling back changes. . .')
 
                 # Close the conneciton

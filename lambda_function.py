@@ -34,11 +34,20 @@ def lambda_handler(event, context):
         df_data = db_pull(conn)
 
         if df_data is not None and not df_data.empty:
+            print(f'Found {len(df_data)} records matching the query.')
             print(f'Database is not empty. . .{df_data.to_dict()}')
+            
+          
             df_nodes, df_edges = gephi_restructure(df_data)
+            
+            print(f'Restructured the data')
+            print(f'Nodes table Length: {len(df_nodes)}')
+            print(f'Nodes table sample data: {df_nodes.head(1).to_dict()}')
+            print(f'Edges table length: {len(df_edges)}')
+            print(f'Edges table sample data: {df_edges.head(1).to_dict()}')
 
             # Pushing the data backl to the database 
-            db_push_status = db_push(conn, df_nodes, df_edges)
+            db_push_status = db_push(conn, df_nodes, df_edges, df_data)
 
             if db_push_status:    
                 # Close the connection

@@ -1,0 +1,38 @@
+# Buildspec Reference Doc: https://docs.aws.amazon.com/codebuild/latest/userguide/build-spec-ref.html
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+  pre_build:
+    commands:
+      - echo "[+] Updating PIP...."
+      - pip install --upgrade pip
+      - echo "[+] Installing dependencies...."
+      - mkdir python
+      - ls
+      - cd python
+      - pip install psycopg2-binary psycopg2 jmespath numpy pandas urllib3 tzdata six python-dateutil pytz s3transfer -t .
+      - ls
+      - cd ..
+      - yum install zip unzip -y -q
+      - zip -r test-lambda-layer.zip python
+      - ls
+
+  build:
+    commands:
+      - echo "Starting build `date` in `pwd`"
+      - echo "Build completed `date` in `pwd`"
+
+  post_build:
+    commands:
+      - echo "Starting Lambda Layer Deployment `date` in `pwd`"
+      - >
+        bash -c '
+        aws lambda publish-layer-version
+        --layer-name gephi-restructure
+        --description "Dependecies layer for gephi-restructure lambda function"
+        --license-info "MIT"
+        --zip-file fileb://test-lambda-layer.zip
+        --compatible-runtimes python3.8 python3.9'
+      - echo "Completed Lambda Layer Deployment `date` in `pwd`"

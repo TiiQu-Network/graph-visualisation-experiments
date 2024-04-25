@@ -3,50 +3,81 @@ import json
 from typing import List, Tuple, Dict, Optional
 import logging
 
-# Logging configuration
-logging.basicConfig(filename='gephi_restructure.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 import psycopg2
 import boto3
 
-from utils.gephi_restructure import db_connect, db_pull, db_push, gephi_restructure
+from utils.gephi_restructure import get_db_version, db_connect, db_pull, db_push, gephi_restructure, db_rollback, get_db_tables
 
 # PostgreSQL config
 ConfigDict = Dict[str, str]
 
 db_params: ConfigDict = {
-    'DBNAME': 'pdf2qadev',
-    'USER': 'dev_user',
-    'ENDPOINT': 'pdf2qa-dev20231229171910310300000001.clfojyqicnb4.eu-west-2.rds.amazonaws.com',
-    'REGION': 'eu-west-2',
-    'PORT': '5432'
+    'DBNAME': os.environ['DBNAME'],
+    'USER': os.environ['USER'],
+    'ENDPOINT': os.environ['ENDPOINT'],
+    'REGION': os.environ['REGION'],
+    'PORT': os.environ['PORT'],
+    'PASSWORD': os.environ['PASSWORD']
 }
 
-def main():
-    # Establish the connection to the database
+
+def lambda_handler(event, context):
     conn = db_connect(db_params)
 
     if conn:
+        db_version = get_db_version(conn)
+        print(f'PostgreSQL version: {db_version}')
+
+        db_tables = get_db_tables(conn)
+        print(f'Tables in Postgres database: {db_tables}')
+
         df_data = db_pull(conn)
 
         if df_data is not None and not df_data.empty:
+            print(f'Found {len(df_data)} records matching the query.')
+            print(f'Database is not empty. . .{df_data.to_dict()}')
+            
+          
             df_nodes, df_edges = gephi_restructure(df_data)
+            
+            print(f'Restructured the data')
+            print(f'Nodes table Length: {len(df_nodes)}')
+            print(f'Nodes table sample data: {df_nodes.head(1).to_dict()}')
+            print(f'Edges table length: {len(df_edges)}')
+            print(f'Edges table sample data: {df_edges.head(1).to_dict()}')
 
             # Pushing the data backl to the database 
-            db_push(conn, df_nodes, df_edges)
-    
-    # Close the connection
-    conn.close()
-    logging.info('Closing the database connection. . .')
+            db_push_status = db_push(conn, df_nodes, df_edges, df_data)
 
+            if db_push_status:    
+                # Close the connection
+                conn.close()
+                print('Closing the database connection. . .')
+                
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps({'message': 'successfully restructured the data!'})
+                }
+            else:
+                # Rollback the changes
+                db_rollback()
+                print('Failed to push data, rolling back changes. . .')
 
-def lambda_handler():
-    # TODO implement
+                # Close the conneciton
+                conn.close()
+                print('Closing the database connection. . .')
 
-    main()
-    return {
-        'statusCode': 200,
-        'body': json.dumps({'message': 'successfully restructured the data!'})
-    }
-
-lambda_handler()
+                return {
+                    'statusCode': 200,
+                    'body': json.dumps({'message': 'Restructuring failed. . .'})
+                } 
+        else:
+            return {
+                'statusCode': 200,
+                'body': json.dumps({'message': 'Restructuring failed. . .No data exists in database.'})
+            } 
+    else:
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'message': 'Restructuring failed. . .connection to database failed.'})
+        } 

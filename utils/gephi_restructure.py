@@ -112,28 +112,32 @@ def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame, df
         with conn.cursor() as cur:
             # Push nodes to GephiNode table
             for _, row in df_nodes.iterrows():
-                cur.execute("""INSERT INTO GephiNode (id, nodeLabel, subtopicid, topicid, macrotopicid) VALUES (%s, %s, %s, %s, %s);""", 
+                cur.execute("""INSERT INTO GephiNode (id, nodeLabel, qnasubtopicid, topicid, macrotopicid) VALUES (%s, %s, %s, %s, %s);""", 
                             (row['id'], row['nodeLabel'], row['subtopicid'], row['topicid'], row['macrotopicid']))
 
             # Push edges to GephiEdges table
             for _, row in df_edges.iterrows():
-                cur.execute("INSERT INTO GephiEdges (id, sourceId, source, targetId, target, type) VALUES (%s, %s, %s, %s, %s, %s);", 
-                           (row['id'], row['SourceId'], row['Source'], row['TargetId'], row['Target'], row['Type']))
+                cur.execute("INSERT INTO GephiEdge (id, sourceId, source, targetId, target, type) VALUES (%s, %s, %s, %s, %s, %s);", 
+                           (row['id'], row['sourceid'], row['source'], row['targetid'], row['target'], row['type']))
 
             # Update the Status field in qnaSubtopic, Macrotopic, and Topic tables
             subtopic_ids = df_nodes.loc[df_nodes['nodeLabel'].isin(df['subtopic']), 'id'].tolist()
             topic_ids = df_nodes.loc[df_nodes['nodeLabel'].isin(df['topic']), 'id'].tolist()
             macrotopic_ids = df_nodes.loc[df_nodes['nodeLabel'].isin(df['macrotopic']), 'id'].tolist()
 
-            cur.execute("UPDATE qnaSubtopic SET Status = 1 WHERE id IN %s;", (tuple(subtopic_ids),))
-            cur.execute("UPDATE Topic SET Status = 1 WHERE id IN %s;", (tuple(topic_ids),))
-            cur.execute("UPDATE Macrotopic SET Status = 1 WHERE id IN %s;", (tuple(macrotopic_ids),))
+            if subtopic_ids:
+                cur.execute("UPDATE qnaSubtopic SET Status = 1 WHERE id = ANY(%s);", (subtopic_ids,))
+            if topic_ids:
+                cur.execute("UPDATE Topic SET Status = 1 WHERE id = ANY(%s);", (topic_ids,))
+            if macrotopic_ids:
+                cur.execute("UPDATE Macrotopic SET Status = 1 WHERE id = ANY(%s);", (macrotopic_ids,))
 
             # Commit the changes
             conn.commit()
 
             logging.info('Data pushed successfully.')
             return True
+
     except psycopg2.Error as err:
         logging.error(f'Error pushing data to the database: {err}')
         return False
@@ -164,6 +168,14 @@ def gephi_restructure(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     gephiNodes['topicid'] = gephiNodes['nodeLabel'].apply(lambda x: df.loc[df['topic'] == x, 'topicid'].values[0] if x in df['topic'].values else None)
     gephiNodes['macrotopicid'] = gephiNodes['nodeLabel'].apply(lambda x: df.loc[df['macrotopic'] == x, 'macrotopicid'].values[0] if x in df['macrotopic'].values else None)
 
+    # Convert the 'id', 'subtopicid', 'topicid', 'macrotopicid' columns to int64, filling NaN with a placeholder (-1)
+    gephiNodes = gephiNodes.fillna(-1).astype({
+        'id': 'int64',
+        'subtopicid': 'int64',
+        'topicid': 'int64',
+        'macrotopicid': 'int64'
+    })
+
     # Create the gephiEdges DataFrame
     gephiEdges = pd.DataFrame(columns=['id', 'sourceid', 'source', 'targetid', 'target', 'type'])
 
@@ -192,5 +204,15 @@ def gephi_restructure(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     # Reset the index of gephiEdges to ensure continuous indexing
     gephiEdges.reset_index(drop=True, inplace=True)
+
+    # Convert the columns in gephiEdges to appropriate data types
+    gephiEdges = gephiEdges.astype({
+        'id': 'int64',
+        'sourceid': 'int64',
+        'targetid': 'int64',
+        'source': 'object',
+        'target': 'object',
+        'type': 'object'
+    })
     
     return gephiNodes, gephiEdges

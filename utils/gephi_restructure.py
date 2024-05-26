@@ -112,7 +112,7 @@ def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame, df
         with conn.cursor() as cur:
             # Push nodes to GephiNode table
             for _, row in df_nodes.iterrows():
-                cur.execute("""INSERT INTO GephiNode (id, nodeLabel, subtopicid, topicid, macrotopicid) VALUES (%s, %s, %s, %s, %s);""", 
+                cur.execute("""INSERT INTO GephiNode (id, nodeLabel, qnasubtopicid, topicid, macrotopicid) VALUES (%s, %s, %s, %s, %s);""", 
                             (row['id'], row['nodeLabel'], row['subtopicid'], row['topicid'], row['macrotopicid']))
 
             # Push edges to GephiEdges table

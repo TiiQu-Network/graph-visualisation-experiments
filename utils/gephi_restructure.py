@@ -117,23 +117,27 @@ def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame, df
 
             # Push edges to GephiEdges table
             for _, row in df_edges.iterrows():
-                cur.execute("INSERT INTO GephiEdges (id, sourceId, source, targetId, target, type) VALUES (%s, %s, %s, %s, %s, %s);", 
-                           (row['id'], row['SourceId'], row['Source'], row['TargetId'], row['Target'], row['Type']))
+                cur.execute("INSERT INTO GephiEdge (id, sourceId, source, targetId, target, type) VALUES (%s, %s, %s, %s, %s, %s);", 
+                           (row['id'], row['sourceid'], row['source'], row['targetid'], row['target'], row['type']))
 
             # Update the Status field in qnaSubtopic, Macrotopic, and Topic tables
             subtopic_ids = df_nodes.loc[df_nodes['nodeLabel'].isin(df['subtopic']), 'id'].tolist()
             topic_ids = df_nodes.loc[df_nodes['nodeLabel'].isin(df['topic']), 'id'].tolist()
             macrotopic_ids = df_nodes.loc[df_nodes['nodeLabel'].isin(df['macrotopic']), 'id'].tolist()
 
-            cur.execute("UPDATE qnaSubtopic SET Status = 1 WHERE id IN %s;", (tuple(subtopic_ids),))
-            cur.execute("UPDATE Topic SET Status = 1 WHERE id IN %s;", (tuple(topic_ids),))
-            cur.execute("UPDATE Macrotopic SET Status = 1 WHERE id IN %s;", (tuple(macrotopic_ids),))
+            if subtopic_ids:
+                cur.execute("UPDATE qnaSubtopic SET Status = 1 WHERE id = ANY(%s);", (subtopic_ids,))
+            if topic_ids:
+                cur.execute("UPDATE Topic SET Status = 1 WHERE id = ANY(%s);", (topic_ids,))
+            if macrotopic_ids:
+                cur.execute("UPDATE Macrotopic SET Status = 1 WHERE id = ANY(%s);", (macrotopic_ids,))
 
             # Commit the changes
             conn.commit()
 
             logging.info('Data pushed successfully.')
             return True
+
     except psycopg2.Error as err:
         logging.error(f'Error pushing data to the database: {err}')
         return False

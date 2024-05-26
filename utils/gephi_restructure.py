@@ -164,6 +164,14 @@ def gephi_restructure(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     gephiNodes['topicid'] = gephiNodes['nodeLabel'].apply(lambda x: df.loc[df['topic'] == x, 'topicid'].values[0] if x in df['topic'].values else None)
     gephiNodes['macrotopicid'] = gephiNodes['nodeLabel'].apply(lambda x: df.loc[df['macrotopic'] == x, 'macrotopicid'].values[0] if x in df['macrotopic'].values else None)
 
+    # Convert the 'id', 'subtopicid', 'topicid', 'macrotopicid' columns to int64, filling NaN with a placeholder (-1)
+    gephiNodes = gephiNodes.fillna(-1).astype({
+        'id': 'int64',
+        'subtopicid': 'int64',
+        'topicid': 'int64',
+        'macrotopicid': 'int64'
+    })
+
     # Create the gephiEdges DataFrame
     gephiEdges = pd.DataFrame(columns=['id', 'sourceid', 'source', 'targetid', 'target', 'type'])
 
@@ -192,5 +200,15 @@ def gephi_restructure(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
 
     # Reset the index of gephiEdges to ensure continuous indexing
     gephiEdges.reset_index(drop=True, inplace=True)
+
+    # Convert the columns in gephiEdges to appropriate data types
+    gephiEdges = gephiEdges.astype({
+        'id': 'int64',
+        'sourceid': 'int64',
+        'targetid': 'int64',
+        'source': 'object',
+        'target': 'object',
+        'type': 'object'
+    })
     
     return gephiNodes, gephiEdges

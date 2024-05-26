@@ -104,7 +104,6 @@ def db_pull(conn: connection) -> Optional[pd.DataFrame]:
         return None
    
 
-# TODO: Will need to add extra fields in GephiEdges tables to hold the sourceid and targetid 
 def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame, df: pd.DataFrame) -> bool:
     '''
     Push nodes and edges DataFrames to the GephiNode and GephiEdges tables in the database.
@@ -113,11 +112,12 @@ def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame, df
         with conn.cursor() as cur:
             # Push nodes to GephiNode table
             for _, row in df_nodes.iterrows():
-                cur.execute("INSERT INTO GephiNode (id, nodeLabel) VALUES (%s, %s);", (row['id'], row['nodeLabel']))
+                cur.execute("""INSERT INTO GephiNode (id, nodeLabel, subtopicid, topicid, macrotopicid) VALUES (%s, %s, %s, %s, %s);""", 
+                            (row['id'], row['nodeLabel'], row['subtopicid'], row['topicid'], row['macrotopicid']))
 
             # Push edges to GephiEdges table
             for _, row in df_edges.iterrows():
-                cur.execute("INSERT INTO GephiEdges (sourceId, source, targetId, target, type) VALUES (%s, %s, %s, %s, %s);", 
+                cur.execute("INSERT INTO GephiEdges (id, sourceId, source, targetId, target, type) VALUES (%s, %s, %s, %s, %s);", 
                            (row['SourceId'], row['Source'], row['TargetId'], row['Target'], row['Type']))
 
             # Update the Status field in qnaSubtopic, Macrotopic, and Topic tables
@@ -155,23 +155,42 @@ def gephi_restructure(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     # Create a unique set of nodes from topics, subtopics, and macrotopics
     unique_nodes = set(df['subtopic']) | set(df['topic']) | set(df['macrotopic'])
 
-    # Create a DataFrame for nodes
-    nodes_df = pd.DataFrame(list(unique_nodes), columns=['nodeLabel'])
-    nodes_df['id'] = nodes_df['nodeLabel'].apply(lambda x: str(df.loc[df['subtopic'] == x, 'subtopicid'].values[0]) if x in set(df['subtopic']) else
-                                                 str(df.loc[df['topic'] == x, 'topicid'].values[0]) if x in set(df['topic']) else
-                                                 str(df.loc[df['macrotopic'] == x, 'macrotopicid'].values[0]))
+    # Create the gephiNodes DataFrame
+    gephiNodes = pd.DataFrame(list(unique_nodes), columns=['nodeLabel'])
+    gephiNodes['id'] = gephiNodes.index + 1  # Assign unique ids starting from 1
 
-    # Create a DataFrame for edges
-    edges_df = pd.DataFrame(columns=['Source', 'SourceId', 'Target', 'TargetId', 'Type'])
+    # Assign subtopicid, topicid, and macrotopicid based on node type
+    gephiNodes['subtopicid'] = gephiNodes['nodeLabel'].apply(lambda x: df.loc[df['subtopic'] == x, 'subtopicid'].values[0] if x in df['subtopic'].values else None)
+    gephiNodes['topicid'] = gephiNodes['nodeLabel'].apply(lambda x: df.loc[df['topic'] == x, 'topicid'].values[0] if x in df['topic'].values else None)
+    gephiNodes['macrotopicid'] = gephiNodes['nodeLabel'].apply(lambda x: df.loc[df['macrotopic'] == x, 'macrotopicid'].values[0] if x in df['macrotopic'].values else None)
+
+    # Create the gephiEdges DataFrame
+    gephiEdges = pd.DataFrame(columns=['id', 'sourceid', 'source', 'targetid', 'target', 'type'])
+
+    # Function to add edge if it doesn't already exist
+    def add_edge(source_node, target_node, gephiEdges):
+        source_id = gephiNodes.loc[gephiNodes['nodeLabel'] == source_node, 'id'].values[0]
+        target_id = gephiNodes.loc[gephiNodes['nodeLabel'] == target_node, 'id'].values[0]
+        
+        # Check if the edge already exists
+        if not ((gephiEdges['sourceid'] == source_id) & (gephiEdges['targetid'] == target_id) | 
+                (gephiEdges['sourceid'] == target_id) & (gephiEdges['targetid'] == source_id)).any():
+            new_id = gephiEdges['id'].max() + 1 if not gephiEdges.empty else 1
+            new_edge = pd.DataFrame({'id': [new_id],
+                                    'sourceid': [source_id],
+                                    'source': [source_node],
+                                    'targetid': [target_id],
+                                    'target': [target_node],
+                                    'type': ['undirected']})
+            gephiEdges = pd.concat([gephiEdges, new_edge], ignore_index=True)
+        return gephiEdges
 
     # Iterate through the DataFrame to create edges
     for index, row in df.iterrows():
-        source_node = row['macrotopic']
-        target_node = row['topic']
-        edges_df = pd.concat([edges_df, pd.DataFrame({'Source': [source_node], 'SourceId': [str(row['macrotopicid'])], 'Target': [target_node], 'TargetId': [str(row['topicid'])], 'Type': ['undirected']})])
+        gephiEdges = add_edge(row['macrotopic'], row['topic'], gephiEdges)
+        gephiEdges = add_edge(row['topic'], row['subtopic'], gephiEdges)
 
-        source_node = row['topic']
-        target_node = row['subtopic']
-        edges_df = pd.concat([edges_df, pd.DataFrame({'Source': [source_node], 'SourceId': [str(row['topicid'])], 'Target': [target_node], 'TargetId': [str(row['subtopicid'])], 'Type': ['undirected']})])
-
-    return nodes_df, edges_df
+    # Reset the index of gephiEdges to ensure continuous indexing
+    gephiEdges.reset_index(drop=True, inplace=True)
+    
+    return gephiNodes, gephiEdges

@@ -117,7 +117,7 @@ def db_push(conn: connection, df_nodes: pd.DataFrame, df_edges: pd.DataFrame, df
 
             # Push edges to GephiEdges table
             for _, row in df_edges.iterrows():
-                cur.execute("INSERT INTO GephiEdges (id, sourceId, source, targetId, target, type) VALUES (%s, %s, %s, %s, %s);", 
+                cur.execute("INSERT INTO GephiEdges (id, sourceId, source, targetId, target, type) VALUES (%s, %s, %s, %s, %s, %s);", 
                            (row['id'], row['SourceId'], row['Source'], row['TargetId'], row['Target'], row['Type']))
 
             # Update the Status field in qnaSubtopic, Macrotopic, and Topic tables
